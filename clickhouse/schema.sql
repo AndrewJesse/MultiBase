@@ -1,0 +1,1 @@
+../gitops/charts/observability/files/schema.sql

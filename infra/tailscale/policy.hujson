@@ -1,0 +1,28 @@
+// Tailscale ACL policy, applied by .github/workflows/tailscale-acl.yml
+{
+	"tagOwners": {
+		"tag:node":   ["autogroup:admin"],
+		"tag:prober": ["autogroup:admin"],
+		"tag:db":     ["autogroup:admin"],
+		"tag:k8s":    ["autogroup:admin"],
+	},
+
+	"acls": [
+		// Admins can reach everything.
+		{"action": "accept", "src": ["autogroup:admin"], "dst": ["*:*"]},
+		// Nodes form the MicroK8s/etcd/dqlite cluster and carry pod traffic.
+		{"action": "accept", "src": ["tag:node"], "dst": ["tag:node:*"]},
+		// Probers reach Postgres and HTTP endpoints only.
+		{"action": "accept", "src": ["tag:prober"], "dst": ["tag:db:5432,8000,9187", "tag:k8s:443,8000"]},
+		{"action": "accept", "src": ["tag:k8s"], "dst": ["tag:db:5432"]},
+	],
+
+	"ssh": [
+		{"action": "accept", "src": ["autogroup:admin"], "dst": ["tag:node"], "users": ["ubuntu"]},
+	],
+
+	"tests": [
+		{"src": "tag:prober", "accept": ["tag:db:5432"], "deny": ["tag:node:22"]},
+		{"src": "tag:node", "accept": ["tag:node:16443"]},
+	],
+}

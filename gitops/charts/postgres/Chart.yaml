@@ -1,0 +1,4 @@
+apiVersion: v2
+name: postgres
+version: 0.1.0
+description: CloudNativePG cluster with Barman Cloud Plugin backups to S3

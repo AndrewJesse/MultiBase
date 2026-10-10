@@ -1,0 +1,4 @@
+clickhouseImage: clickhouse/clickhouse-server:25.3
+storageSize: 10Gi
+# Pin to the home node so the 2 GiB-class AWS nodes keep their memory.
+nodeSelector: {}

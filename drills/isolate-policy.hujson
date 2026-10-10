@@ -1,0 +1,14 @@
+// Same as infra/tailscale/policy.hujson but tag:isolated nodes cannot reach or be reached by other nodes.
+{
+	"tagOwners": {
+		"tag:node":     ["autogroup:admin"],
+		"tag:prober":   ["autogroup:admin"],
+		"tag:db":       ["autogroup:admin"],
+		"tag:k8s":      ["autogroup:admin"],
+		"tag:isolated": ["autogroup:admin"],
+	},
+	"acls": [
+		{"action": "accept", "src": ["autogroup:admin"], "dst": ["*:*"]},
+		{"action": "accept", "src": ["tag:node"], "dst": ["tag:node:*"]},
+	],
+}

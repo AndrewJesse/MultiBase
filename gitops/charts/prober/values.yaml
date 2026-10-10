@@ -1,0 +1,5 @@
+image: ghcr.io/quietcode-dev/multibase-prober:latest
+clickhouseUrl: http://clickhouse.observability.svc:8123
+primaryDsn: postgres://app@supabase-pg-rw.databases.svc:5432/app?sslmode=require
+replicaDsn: postgres://app@supabase-pg-ro.databases.svc:5432/app?sslmode=require
+authUrl: ""

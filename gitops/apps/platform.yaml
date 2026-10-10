@@ -1,0 +1,104 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tailscale-operator
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://pkgs.tailscale.com/helmcharts
+    chart: tailscale-operator
+    targetRevision: 1.*
+    helm:
+      valuesObject:
+        oauthSecretVolume:
+          secret: { secretName: operator-oauth }
+  destination: { server: https://kubernetes.default.svc, namespace: tailscale }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: kube-prometheus-stack
+    targetRevision: 70.*
+    helm:
+      valuesObject:
+        grafana:
+          sidecar:
+            dashboards: { enabled: true, searchNamespace: ALL }
+          additionalDataSources:
+            - name: ClickHouse
+              type: grafana-clickhouse-datasource
+              jsonData: { host: clickhouse.observability.svc, port: 9000, protocol: native }
+          plugins: [grafana-clickhouse-datasource]
+        prometheus:
+          prometheusSpec:
+            retention: 7d
+            ruleSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            serviceMonitorSelectorNilUsesHelmValues: false
+  destination: { server: https://kubernetes.default.svc, namespace: monitoring }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alloy
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: alloy
+    targetRevision: 0.*
+    helm:
+      valuesObject:
+        controller: { type: daemonset }
+        alloy:
+          configMap: { create: false, name: alloy-config, key: config.alloy }
+  destination: { server: https://kubernetes.default.svc, namespace: observability }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability-config
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/QuietCode-Dev/MultiBase.git
+    targetRevision: main
+    path: gitops/charts/observability
+  destination: { server: https://kubernetes.default.svc, namespace: observability }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prober
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/QuietCode-Dev/MultiBase.git
+    targetRevision: main
+    path: gitops/charts/prober
+  destination: { server: https://kubernetes.default.svc, namespace: observability }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]

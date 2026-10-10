@@ -1,0 +1,70 @@
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: pg-backups
+  namespace: databases
+spec:
+  retentionPolicy: "14d"
+  configuration:
+    destinationPath: s3://{{ .Values.backupBucket }}/pg/
+    s3Credentials:
+      inheritFromIAMRole: true # node role via IMDS, no long-lived keys
+    wal: { compression: gzip }
+    data: { compression: gzip }
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: supabase-pg
+  namespace: databases
+spec:
+  instances: {{ .Values.instances }}
+  imageName: {{ .Values.image }}
+  storage:
+    size: {{ .Values.storageSize }}
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    podAntiAffinityType: required
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+      postInitApplicationSQL:
+        - CREATE SCHEMA IF NOT EXISTS auth
+        - CREATE SCHEMA IF NOT EXISTS extensions
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: pg-backups
+  monitoring:
+    enablePodMonitor: true
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: daily
+  namespace: databases
+spec:
+  schedule: "0 0 3 * * *"
+  backupOwnerReference: self
+  method: plugin
+  cluster: { name: supabase-pg }
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
+---
+# Pods share the node role via IMDS hop limit 2; only the database pods may reach it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: block-imds-except-postgres
+  namespace: databases
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: cnpg.io/cluster, operator: NotIn, values: [supabase-pg] }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: { cidr: 0.0.0.0/0, except: [169.254.169.254/32] }

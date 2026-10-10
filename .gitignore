@@ -1,0 +1,8 @@
+.terraform/
+*.tfstate*
+backend.hcl
+.terraform.lock.hcl.bak
+*.pem
+*.key
+.env
+prober/prober

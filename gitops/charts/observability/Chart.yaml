@@ -1,0 +1,4 @@
+apiVersion: v2
+name: observability
+version: 0.1.0
+description: ClickHouse, Alloy config, alert rules and dashboards

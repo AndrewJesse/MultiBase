@@ -1,0 +1,7 @@
+backupBucket: multibase-pg-backups-REPLACE_ACCOUNT_ID
+awsRegion: us-east-1
+# Day-1 spike: try a Supabase image here (tag must start with the major version, else use an ImageCatalog).
+# Fallback is the stock CNPG image plus Supabase migrations.
+image: ghcr.io/cloudnative-pg/postgresql:17
+instances: 2
+storageSize: 10Gi

@@ -1,0 +1,27 @@
+#cloud-config
+hostname: ${hostname}
+package_update: true
+packages:
+  - jq
+  - curl
+  - unattended-upgrades
+snap:
+  commands:
+    - snap install aws-cli --classic
+    - snap install microk8s --classic --channel=1.32/stable
+write_files:
+  - path: /usr/local/bin/ts-join.sh
+    permissions: "0750"
+    content: |
+      #!/usr/bin/env bash
+      # Auth key lives in SSM so it never appears in Terraform state or user-data.
+      set -euo pipefail
+      key=$(aws ssm get-parameter --region ${region} --name /multibase/ts-authkey \
+        --with-decryption --query Parameter.Value --output text)
+      tailscale up --authkey "$key" --hostname ${hostname} --ssh --advertise-tags=tag:node
+runcmd:
+  - curl -fsSL https://tailscale.com/install.sh | sh
+  - /usr/local/bin/ts-join.sh
+  - usermod -aG microk8s ubuntu
+  - microk8s status --wait-ready
+  - microk8s enable dns hostpath-storage helm

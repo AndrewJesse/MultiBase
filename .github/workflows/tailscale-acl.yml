@@ -1,0 +1,19 @@
+name: tailscale-acl
+on:
+  push:
+    branches: [main]
+    paths: [infra/tailscale/policy.hujson]
+  pull_request:
+    paths: [infra/tailscale/policy.hujson]
+
+jobs:
+  acl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: tailscale/gitops-acl-action@v1
+        with:
+          api-key: ${{ secrets.TS_API_KEY }}
+          tailnet: ${{ secrets.TS_TAILNET }}
+          policy-file: infra/tailscale/policy.hujson
+          action: ${{ github.event_name == 'push' && 'apply' || 'test' }}

@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-config
+  namespace: observability
+data:
+  config.alloy: |
+    prometheus.exporter.unix "node" { }
+
+    prometheus.scrape "node" {
+      targets    = prometheus.exporter.unix.node.targets
+      forward_to = [prometheus.remote_write.default.receiver]
+    }
+
+    prometheus.remote_write "default" {
+      endpoint {
+        url = "http://monitoring-kube-prometheus-prometheus.monitoring.svc:9090/api/v1/write"
+      }
+    }
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: slo-rules
+  namespace: monitoring
+spec:
+  groups:
+    - name: multibase-slo
+      rules:
+        - record: multibase:probe_error_ratio:rate5m
+          expr: |
+            sum by (probe) (rate(multibase_probe_total{result="fail"}[5m]))
+            / sum by (probe) (rate(multibase_probe_total[5m]))
+        - record: multibase:probe_error_ratio:rate1h
+          expr: |
+            sum by (probe) (rate(multibase_probe_total{result="fail"}[1h]))
+            / sum by (probe) (rate(multibase_probe_total[1h]))
+        # 99.9% SLO => 0.1% budget; 14.4x burn over 1h and 5m pages.
+        - alert: QuerySLOFastBurn
+          expr: |
+            multibase:probe_error_ratio:rate1h{probe="query"} > (14.4 * 0.001)
+            and multibase:probe_error_ratio:rate5m{probe="query"} > (14.4 * 0.001)
+          for: 2m
+          labels: { severity: page }
+          annotations: { summary: "Query success SLO burning budget 14x too fast" }
+        - alert: QueryLatencyP95High
+          expr: histogram_quantile(0.95, sum by (le, site) (rate(multibase_probe_latency_seconds_bucket{probe="query"}[10m]))) > 0.05
+          for: 10m
+          labels: { severity: ticket }
+        - alert: ReplicationLagHigh
+          expr: max(multibase_replication_lag_seconds) > 5
+          for: 5m
+          labels: { severity: page }
+        - alert: NodeDiskAlmostFull
+          expr: node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} < 0.15
+          for: 5m
+          labels: { severity: page }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dashboard-slo
+  namespace: monitoring
+  labels: { grafana_dashboard: "1" }
+data:
+  slo.json: |
+    {
+      "title": "MultiBase SLOs", "uid": "multibase-slo", "schemaVersion": 39,
+      "panels": [
+        {"type": "timeseries", "title": "Query error ratio", "gridPos": {"x":0,"y":0,"w":12,"h":8},
+         "targets": [{"expr": "multibase:probe_error_ratio:rate5m{probe=\"query\"}"}]},
+        {"type": "timeseries", "title": "Query p95 by site", "gridPos": {"x":12,"y":0,"w":12,"h":8},
+         "targets": [{"expr": "histogram_quantile(0.95, sum by (le, site) (rate(multibase_probe_latency_seconds_bucket{probe=\"query\"}[5m])))"}]},
+        {"type": "timeseries", "title": "Replication lag (s)", "gridPos": {"x":0,"y":8,"w":12,"h":8},
+         "targets": [{"expr": "multibase_replication_lag_seconds"}]}
+      ]
+    }
