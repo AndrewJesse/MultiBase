@@ -15,18 +15,31 @@ spec:
     spec:
       containers:
         - name: prober
-          image: {{ .Values.image }}
+          image: { { .Values.image } }
           ports:
             - { name: metrics, containerPort: 9100 }
           env:
             - name: SITE
               valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
-            - { name: PG_PRIMARY_DSN, value: {{ .Values.primaryDsn | quote }} }
-            - { name: PG_REPLICA_DSN, value: {{ .Values.replicaDsn | quote }} }
-            - { name: AUTH_URL, value: {{ .Values.authUrl | quote }} }
-            - { name: CLICKHOUSE_URL, value: {{ .Values.clickhouseUrl | quote }} }
+            - {
+                name: PG_PRIMARY_DSN,
+                value: { { .Values.primaryDsn | quote } },
+              }
+            - {
+                name: PG_REPLICA_DSN,
+                value: { { .Values.replicaDsn | quote } },
+              }
+            - { name: AUTH_URL, value: { { .Values.authUrl | quote } } }
+            - {
+                name: CLICKHOUSE_URL,
+                value: { { .Values.clickhouseUrl | quote } },
+              }
             - name: PGPASSWORD
-              valueFrom: { secretKeyRef: { name: prober-pg, key: password, optional: true } }
+              valueFrom:
+                {
+                  secretKeyRef:
+                    { name: prober-pg, key: password, optional: true },
+                }
           readinessProbe:
             httpGet: { path: /healthz, port: metrics }
           resources:

@@ -42,7 +42,8 @@ spec:
             and multibase:probe_error_ratio:rate5m{probe="query"} > (14.4 * 0.001)
           for: 2m
           labels: { severity: page }
-          annotations: { summary: "Query success SLO burning budget 14x too fast" }
+          annotations:
+            { summary: "Query success SLO burning budget 14x too fast" }
         - alert: QueryLatencyP95High
           expr: histogram_quantile(0.95, sum by (le, site) (rate(multibase_probe_latency_seconds_bucket{probe="query"}[10m]))) > 0.05
           for: 10m

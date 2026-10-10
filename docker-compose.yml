@@ -1,0 +1,114 @@
+services:
+  postgres:
+    image: postgres:18
+    command: ["postgres", "-c", "wal_level=replica", "-c", "max_wal_senders=5", "-c", "hba_file=/etc/postgresql/pg_hba.conf"]
+    environment:
+      POSTGRES_DB: app
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: localdev
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pg-primary:/var/lib/postgresql
+      - ./local/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./local/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  replica:
+    image: postgres:18
+    entrypoint: ["bash", "-ec"]
+    command:
+      - |
+        if [ ! -s "$${PGDATA}/PG_VERSION" ]; then
+          until pg_isready -h postgres -U app -d app; do sleep 1; done
+          PGPASSWORD=replicator pg_basebackup -h postgres -D "$${PGDATA}" -U replicator -Fp -Xs -P -R
+        fi
+        exec docker-entrypoint.sh postgres -c hot_standby=on -c hba_file=/etc/postgresql/pg_hba.conf
+    environment:
+      PGDATA: /var/lib/postgresql/18/docker
+      POSTGRES_PASSWORD: localdev
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pg-replica:/var/lib/postgresql
+      - ./local/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h localhost -U app -d app"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.3
+    environment:
+      CLICKHOUSE_SKIP_USER_SETUP: "1"
+    ports:
+      - "127.0.0.1:8123:8123"
+    volumes:
+      - ch-data:/var/lib/clickhouse
+      - ./gitops/charts/observability/files/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  prober:
+    build:
+      context: ./prober
+    environment:
+      SITE: local
+      PROBE_INTERVAL: 5s
+      PG_PRIMARY_DSN: postgres://app:localdev@postgres:5432/app?sslmode=disable
+      PG_REPLICA_DSN: postgres://app:localdev@replica:5432/app?sslmode=disable
+      CLICKHOUSE_URL: http://clickhouse:8123
+      METRICS_ADDR: :9100
+    ports:
+      - "127.0.0.1:9100:9100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      replica:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    profiles: [dashboards]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=2d"]
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./local/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on: [prober]
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    profiles: [dashboards]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: localdev
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./local/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on: [prometheus]
+
+volumes:
+  pg-primary:
+  pg-replica:
+  ch-data:
+  prometheus-data:
+  grafana-data:

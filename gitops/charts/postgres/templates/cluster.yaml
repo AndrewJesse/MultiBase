@@ -18,10 +18,10 @@ metadata:
   name: supabase-pg
   namespace: databases
 spec:
-  instances: {{ .Values.instances }}
-  imageName: {{ .Values.image }}
+  instances: { { .Values.instances } }
+  imageName: { { .Values.image } }
   storage:
-    size: {{ .Values.storageSize }}
+    size: { { .Values.storageSize } }
   affinity:
     enablePodAntiAffinity: true
     topologyKey: kubernetes.io/hostname
