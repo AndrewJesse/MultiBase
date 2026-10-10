@@ -17,3 +17,9 @@ variable "roles_anywhere_ca_pem" {
   type        = string
   default     = ""
 }
+
+variable "github_repo" {
+  description = "owner/name allowed to assume the CI role via OIDC"
+  type        = string
+  default     = "QuietCode-Dev/MultiBase"
+}

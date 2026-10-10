@@ -199,3 +199,60 @@ resource "aws_budgets_budget" "monthly" {
     subscriber_email_addresses = [var.budget_email]
   }
 }
+
+# ---------- GitHub Actions OIDC (no long-lived keys in GitHub) ----------
+resource "aws_iam_openid_connect_provider" "github" {
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
+}
+
+data "aws_iam_policy_document" "github_assume" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      values = [
+        "repo:${var.github_repo}:pull_request",
+        "repo:${var.github_repo}:ref:refs/heads/main",
+      ]
+    }
+  }
+}
+
+# Plan-only: read-only AWS plus access to the Terraform state objects.
+resource "aws_iam_role" "github_plan" {
+  name               = "multibase-github-plan"
+  assume_role_policy = data.aws_iam_policy_document.github_assume.json
+}
+
+resource "aws_iam_role_policy_attachment" "github_plan_readonly" {
+  role       = aws_iam_role.github_plan.name
+  policy_arn = "arn:aws:iam::aws:policy/ReadOnlyAccess"
+}
+
+data "aws_iam_policy_document" "github_state" {
+  statement {
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources = ["arn:aws:s3:::multibase-tfstate-${local.account_id}/multibase/*"]
+  }
+  statement {
+    actions   = ["s3:ListBucket"]
+    resources = ["arn:aws:s3:::multibase-tfstate-${local.account_id}"]
+  }
+}
+
+resource "aws_iam_role_policy" "github_state" {
+  name   = "tfstate"
+  role   = aws_iam_role.github_plan.id
+  policy = data.aws_iam_policy_document.github_state.json
+}

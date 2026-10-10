@@ -26,6 +26,27 @@ jobs:
             terraform -chdir=infra/terraform/$d validate
           done
 
+  # Runs only after bootstrap: set repo variable AWS_PLAN_ROLE_ARN to the github_plan_role_arn output.
+  terraform-plan:
+    if: github.event_name == 'pull_request' && vars.AWS_PLAN_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    permissions: { id-token: write, contents: read }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+      - uses: hashicorp/setup-terraform@v3
+      - name: plan compute
+        run: |
+          bucket="multibase-tfstate-$(aws sts get-caller-identity --query Account --output text)"
+          cd infra/terraform/compute
+          terraform init -input=false -backend-config="bucket=$bucket" \
+            -backend-config="key=multibase/compute.tfstate" -backend-config="region=us-east-1" \
+            -backend-config="use_lockfile=true"
+          terraform plan -input=false -lock=false
+
   helm:
     runs-on: ubuntu-latest
     steps:
