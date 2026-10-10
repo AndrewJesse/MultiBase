@@ -25,9 +25,10 @@ services:
     entrypoint: ["bash", "-ec"]
     command:
       - |
+        install -d "$${PGDATA%/*}" "$${PGDATA}"
+        chown postgres:postgres "$${PGDATA%/*}" "$${PGDATA}"
         if [ ! -s "$${PGDATA}/PG_VERSION" ]; then
           until pg_isready -h postgres -U app -d app; do sleep 1; done
-          install -d -o postgres -g postgres "$${PGDATA}"
           runuser -u postgres -- env PGPASSWORD=replicator pg_basebackup -h postgres -D "$${PGDATA}" -U replicator -Fp -Xs -P -R
         fi
         exec docker-entrypoint.sh postgres -c hot_standby=on -c hba_file=/etc/postgresql/pg_hba.conf
