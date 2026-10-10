@@ -21,12 +21,14 @@ services:
 
   replica:
     image: postgres:18
+    user: "0:0"
     entrypoint: ["bash", "-ec"]
     command:
       - |
         if [ ! -s "$${PGDATA}/PG_VERSION" ]; then
           until pg_isready -h postgres -U app -d app; do sleep 1; done
-          PGPASSWORD=replicator pg_basebackup -h postgres -D "$${PGDATA}" -U replicator -Fp -Xs -P -R
+          install -d -o postgres -g postgres "$${PGDATA}"
+          runuser -u postgres -- env PGPASSWORD=replicator pg_basebackup -h postgres -D "$${PGDATA}" -U replicator -Fp -Xs -P -R
         fi
         exec docker-entrypoint.sh postgres -c hot_standby=on -c hba_file=/etc/postgresql/pg_hba.conf
     environment:
