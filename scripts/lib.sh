@@ -17,11 +17,14 @@ need() {
 
 require_aws() {
   need aws terraform jq
+  # Terraform can't read `aws login` sessions directly; hand it the resolved credentials.
+  if [[ -z "${AWS_ACCESS_KEY_ID:-}" ]]; then
+    eval "$(aws configure export-credentials --format env 2>/dev/null)" || true
+  fi
   ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text 2>/dev/null)" \
     || die "AWS credentials not available (run 'aws login' or set AWS_PROFILE)"
   STATE_BUCKET="multibase-tfstate-${ACCOUNT_ID}"
 }
-
 confirm() {
   [[ "${ASSUME_YES:-0}" == 1 ]] && return 0
   read -r -p "$1 [y/N] " ans

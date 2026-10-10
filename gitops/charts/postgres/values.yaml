@@ -1,4 +1,4 @@
-backupBucket: multibase-pg-backups-REPLACE_ACCOUNT_ID
+backupBucket: multibase-pg-backups-829622621743
 awsRegion: us-east-1
 # Day-1 spike: try a Supabase image here (tag must start with the major version, else use an ImageCatalog).
 # Fallback is the stock CNPG image plus Supabase migrations.
